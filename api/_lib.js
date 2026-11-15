@@ -61,18 +61,34 @@ async function getAdminFromReq(req) {
 }
 
 async function ensureFarm(userId) {
-  const { data, error } = await supabase.from("farms").select("*").eq("user_id", userId).single();
-  if (data) return data;
-  // yoksa oluştur
-  const { data: newFarm, error: e2 } = await supabase.from("farms").insert({ user_id: userId }).select().single();
+  const { data: existing } = await supabase
+    .from("farms").select("*").eq("user_id", userId).maybeSingle();
+  if (existing) return existing;
+
+  const { data: newFarm, error: e2 } = await supabase
+    .from("farms")
+    .upsert({ user_id: userId }, { onConflict: "user_id" })
+    .select().single();
   if (e2) throw e2;
-  // envanter başlangıç
+
+  // Envanter başlangıç (upsert zaten idempotent)
   const products = ["yumurta", "bal", "sut", "peynir"];
   for (const p of products) {
-    await supabase.from("inventory").upsert({ user_id: userId, product: p, amount: 0 }, { onConflict: "user_id,product" });
+    await supabase.from("inventory")
+      .upsert({ user_id: userId, product: p, amount: 0 }, { onConflict: "user_id,product" });
   }
-  // hoş geldin bonusu history
-  await supabase.from("history").insert({ user_id: userId, type: "bonus", description: "Hoş geldin bonusu", amount: 150 });
+
+  // Hoş geldin bonusu — sadece yeni farm oluşturulduysa
+  const { data: bonusExists } = await supabase
+    .from("history").select("id")
+    .eq("user_id", userId).eq("type", "bonus").maybeSingle();
+  if (!bonusExists) {
+    await supabase.from("history").insert({
+      user_id: userId, type: "bonus",
+      description: "Hoş geldin bonusu", amount: 150
+    });
+  }
+
   return newFarm;
 }
 
