@@ -19,7 +19,6 @@
 .detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin:12px 0 18px}.detail-box{background:#091426;border:1px solid var(--line);border-radius:10px;padding:11px}.detail-box small{display:block;color:var(--m);font-size:10px;font-weight:800;margin-bottom:5px}.detail-box b{font-size:14px;overflow-wrap:anywhere}
 .detail-section{margin-top:18px}.detail-section h4{font-size:13px;margin-bottom:9px}.detail-table-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px}.detail-table{width:100%;border-collapse:collapse;font-size:11px;min-width:460px}.detail-table th,.detail-table td{padding:9px 10px;text-align:left;border-bottom:1px solid #ffffff12}.detail-table th{color:var(--m);background:#091426}.balance-form{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.balance-form input{flex:1;min-width:150px;padding:10px;background:#091426;border:1px solid var(--line);border-radius:8px;color:var(--t)}.balance-form button{padding:10px 14px;border:0;border-radius:8px;background:var(--green);color:#062012;font-weight:900}
 @media(max-width:600px){.detail-modal{padding:14px}.modal-backdrop{padding:8px}}
-
 </style>
 </head>
 <body>
@@ -110,8 +109,8 @@ async function openUserDetail(userId){
    <div class="detail-box"><small>BAKİYE</small><b class="gold">${money(f.wallet)}</b></div><div class="detail-box"><small>TOPLAM YÜKLEME</small><b>${money(f.total_loaded)}</b></div><div class="detail-box"><small>TOPLAM SATIŞ</small><b>${money(f.total_sold)}</b></div><div class="detail-box"><small>TOPLAM ÇEKİM</small><b>${money(f.total_withdrawn)}</b></div>
   </div>
   <div class="detail-section"><h4>💰 Üye Bakiyesini Düzenle</h4><div class="muted">Yeni bakiye tutarını girin. Bu işlem mevcut bakiyenin üzerine ekleme yapmaz, bakiyeyi girdiğiniz tutara ayarlar.</div><form class="balance-form" id="balanceForm"><input id="newBalance" type="number" min="0" step="0.01" value="${Number(f.wallet||0)}" required><button type="submit">Bakiyeyi Kaydet</button></form></div>
-  <div class="detail-section"><h4>🐾 Hayvanlar</h4>${detailTable(animals,[{key:"type",label:"Tür"},{key:"name",label:"Ad"},{key:"age_seconds",label:"Yaş (sn)"},{key:"created_at",label:"Kayıt tarihi",format:r=>date(r.created_at)}])}</div>
-  <div class="detail-section"><h4>📦 Envanter</h4>${detailTable(inventory,[{key:"product",label:"Ürün"},{key:"amount",label:"Miktar"},{key:"quantity",label:"Adet"}])}</div>
+  <div class="detail-section"><h4>🐾 Hayvanlar</h4>${detailTable(animals.map(a=>({...a, actions: `<button class="btn red" style="padding:4px 8px;font-size:10px;" data-action="delete-animal" data-id="${a.id}">Sil</button>`})), [{key:"type",label:"Tür"},{key:"age_seconds",label:"Yaş (sn)"},{key:"created_at",label:"Kayıt tarihi",format:r=>date(r.created_at)},{key:"actions",label:"İşlem",format:r=>r.actions}])}</div>
+  <div class="detail-section"><h4>📦 Envanter</h4>${detailTable(inventory,[{key:"product",label:"Ürün"},{key:"amount",label:"Miktar"}])}</div>
   <div class="detail-section"><h4>🧾 İşlem Geçmişi</h4>${detailTable(history,[{key:"type",label:"İşlem"},{key:"description",label:"Açıklama"},{key:"amount",label:"Tutar"},{key:"created_at",label:"Tarih",format:r=>date(r.created_at)}])}</div>`;
   $("#balanceForm").addEventListener("submit",e=>saveUserBalance(e,userId));
  }catch(e){content.innerHTML=`<div class="empty">Üye detayları alınamadı: ${esc(e.message)}</div>`}
@@ -135,6 +134,19 @@ async function deleteUser(userId, userName, button){
  }
 }
 
+async function deleteAnimal(animalId, userId){
+  if(!confirm("Bu hayvanı silmek istediğinize emin misiniz? Para iadesi YAPILMAYACAK.")) return;
+  try {
+    await api("/admin-delete-animal", "POST", { animal_id: animalId });
+    toast("Hayvan silindi (para iadesi yapılmadı).");
+    closeUserDetail();
+    await loadData();
+    await openUserDetail(userId);
+  } catch(err) {
+    toast("Hata: " + err.message, true);
+  }
+}
+
 async function saveUserBalance(event,userId){
  event.preventDefault();const value=Number($("#newBalance").value);
  if(!Number.isFinite(value)||value<0)return toast("Geçerli bir bakiye girin.",true);
@@ -146,6 +158,6 @@ function closeUserDetail(){const m=$("#userDetailModal");m.classList.remove("sho
 async function approve(type,id){if(!confirm(type==="load"?"Bu yükleme talebini onaylıyor musunuz?":"Bu çekim talebini onaylıyor musunuz?"))return;try{await api("/admin-approve","POST",{type,id});toast("Talep onaylandı.");await loadData()}catch(e){toast(e.message,true)}}
 async function reject(type,id){const reason=prompt("Reddetme nedeni:","Ödeme doğrulanamadı");if(reason===null)return;try{await api("/admin-reject","POST",{type,id,reason:reason.trim()||"Yönetici reddi"});toast("Talep reddedildi.");await loadData()}catch(e){toast(e.message,true)}}
 async function reply(id){const msg=$("#reply-"+CSS.escape(id))?.value.trim()||"";if(msg.length<2)return toast("Yanıt en az 2 karakter olmalıdır.",true);try{await api("/admin-support-reply","POST",{ticket_id:id,message:msg});toast("Yanıt gönderildi.");await loadData()}catch(e){toast(e.message,true)}}
-$("#closeDetailModal").addEventListener("click",closeUserDetail);$("#userDetailModal").addEventListener("click",e=>{if(e.target.id==="userDetailModal")closeUserDetail()});document.addEventListener("keydown",e=>{if(e.key==="Escape")closeUserDetail()});$("#loginButton").addEventListener("click",login);$("#adminPass").addEventListener("keydown",e=>{if(e.key==="Enter")login()});$("#logoutButton").addEventListener("click",logout);$("#userSearch").addEventListener("input",()=>members(dataState.users));$("#tabs").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(b)tab(b.dataset.tab)});document.addEventListener("click",e=>{const b=e.target.closest("[data-action]");if(!b)return;if(b.dataset.action==="approve")approve(b.dataset.type,b.dataset.id);if(b.dataset.action==="reject")reject(b.dataset.type,b.dataset.id);if(b.dataset.action==="reply")reply(b.dataset.id);if(b.dataset.action==="detail")openUserDetail(b.dataset.id);if(b.dataset.action==="delete-user")deleteUser(b.dataset.id,b.dataset.name,b)});if(token){$("#loginScreen").style.display="none";$("#app").classList.add("show");start()}
+$("#closeDetailModal").addEventListener("click",closeUserDetail);$("#userDetailModal").addEventListener("click",e=>{if(e.target.id==="userDetailModal")closeUserDetail()});document.addEventListener("keydown",e=>{if(e.key==="Escape")closeUserDetail()});$("#loginButton").addEventListener("click",login);$("#adminPass").addEventListener("keydown",e=>{if(e.key==="Enter")login()});$("#logoutButton").addEventListener("click",logout);$("#userSearch").addEventListener("input",()=>members(dataState.users));$("#tabs").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(b)tab(b.dataset.tab)});document.addEventListener("click",e=>{const b=e.target.closest("[data-action]");if(!b)return;if(b.dataset.action==="approve")approve(b.dataset.type,b.dataset.id);if(b.dataset.action==="reject")reject(b.dataset.type,b.dataset.id);if(b.dataset.action==="reply")reply(b.dataset.id);if(b.dataset.action==="detail")openUserDetail(b.dataset.id);if(b.dataset.action==="delete-user")deleteUser(b.dataset.id,b.dataset.name,b);if(b.dataset.action==="delete-animal")deleteAnimal(b.dataset.id, document.querySelector("#detailTitle").dataset.userId)});if(token){$("#loginScreen").style.display="none";$("#app").classList.add("show");start()}
 </script>
 </body></html>
