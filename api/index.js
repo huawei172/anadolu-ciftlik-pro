@@ -696,6 +696,31 @@ module.exports = async (req, res) => {
       }
     }
 
+    // ================= ADMIN HAYVAN SİLME (YENİ) =================
+
+    if (path === "/admin-delete-animal" && req.method === "POST") {
+      const admin = await getAdminFromReq(req);
+      if (!admin) return err(res, "Yetkisiz", 401);
+
+      const { animal_id } = req.body || {};
+      if (!animal_id) return err(res, "Silinecek hayvan ID gerekli");
+
+      const { data: animal, error: findError } = await supabase
+        .from("animals").select("*").eq("id", animal_id).single();
+
+      if (findError || !animal) return err(res, "Hayvan bulunamadı");
+
+      const { error: deleteError } = await supabase
+        .from("animals").delete().eq("id", animal_id);
+
+      if (deleteError) {
+        console.error("Hayvan silme hatası:", deleteError);
+        return err(res, "Hayvan silinemedi", 500);
+      }
+
+      return ok(res, { message: "Hayvan silindi (para iadesi yapılmadı)." });
+    }
+
     return err(res, "Endpoint bulunamadı: " + path, 404);
 
   } catch (e) {
