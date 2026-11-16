@@ -754,14 +754,27 @@ const fmtLive = n => (Number.isFinite(Number(n)) ? Number(n) : 0).toFixed(4).rep
 const escapeHtml = s => String(s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 function normalizePhone(p){ let d = String(p || "").replace(/\D/g, ""); if(d.startsWith("90") && d.length === 12) d = d.slice(2); if(d.startsWith("0") && d.length === 11) d = d.slice(1); return d.length === 10 ? d : d.slice(-10); }
 function isValidTurkishIban(iban){
-  if(!/^TR\\d{24}$/.test(iban)) return false;
-  const rearranged = iban.slice(4) + iban.slice(0,4);
+  // Boşlukları temizle ve büyük harfe çevir
+  iban = String(iban).replace(/\s+/g, '').toUpperCase();
+  
+  // Türkiye IBAN'ları "TR" ile başlar ve toplam 26 karakterdir
+  if(!/^TR[0-9]{24}$/.test(iban)) return false;
+
+  // MOD-97 Algoritması (Uluslararası geçerlilik kontrolü)
+  const rearranged = iban.slice(4) + iban.slice(0, 4);
   let remainder = "";
-  for(const ch of rearranged){
-    const digits = /[A-Z]/.test(ch) ? String(ch.charCodeAt(0) - 55) : ch;
-    remainder = String((Number(remainder + digits)) % 97);
+  for (let i = 0; i < rearranged.length; i++) {
+    const char = rearranged[i];
+    if (char >= 'A' && char <= 'Z') {
+      // Harfleri sayıya çevir (A=10, B=11 ... Z=35)
+      remainder += (char.charCodeAt(0) - 55).toString();
+    } else {
+      remainder += char;
+    }
   }
-  return Number(remainder) === 1;
+  
+  // Kalanı 97'ye böl, sonuç 1 ise IBAN geçerlidir
+  return BigInt(remainder) % 97n === 1n;
 }
 function formatPhoneDisplay(p){
   const d = normalizePhone(p);
